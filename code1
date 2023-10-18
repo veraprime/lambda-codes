@@ -1,0 +1,36 @@
+import boto3
+
+def lambda_handler(event, context):
+    # AWS region (Lambda function should have necessary IAM permissions)
+    aws_region = 'us-east-1'
+
+    # Create a Boto3 EC2 client
+    ec2 = boto3.client('ec2', region_name=aws_region)
+
+    # List all EC2 instances in the region
+    instances = ec2.describe_instances()
+    
+    # Define the tags you want to apply as key-value pairs
+    tags = [
+        {
+            'Key': 'Name',
+            'Value': 'MyEC2Instance'
+        },
+        {
+            'Key': 'Environment',
+            'Value': 'Production'
+        },
+        # Add more tags as needed
+    ]
+
+    # Loop through the instances and apply tags
+    for reservation in instances['Reservations']:
+        for instance in reservation['Instances']:
+            instance_id = instance['InstanceId']
+            # Apply tags to the instance
+            ec2.create_tags(Resources=[instance_id], Tags=tags)
+
+    return {
+        'statusCode': 200,
+        'body': 'Tags applied to all EC2 instances in the region'
+    }

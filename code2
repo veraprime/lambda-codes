@@ -1,0 +1,84 @@
+import json
+import boto3
+ec2=boto3.resource('ec2')
+s3_client = boto3.client('s3')
+rds_client = boto3.client('rds')
+efs_client = boto3.client('efs')
+fsx_client = boto3.client('fsx')
+
+def lambda_handler(event, context):
+    print ('Within function')
+    print(json.dumps(event))
+    ids=[]
+    instances=[]
+    region=event['region']
+    detail=event['detail']
+    eventName=detail['eventName']
+    eventSource=event['source']
+    username=detail['userIdentity']['userName']
+
+
+    print('Region Name ' + region)
+    print('Event Name ' + eventName)  
+
+
+    if eventName == 'RunInstances' and (username == 'ali.adnan' or username == 'fri.sandrine' or username == 'Main_user'):
+        items=detail['responseElements']['instancesSet']['items']
+        for item in items:
+            ids.append(item['instanceId'])
+            instances.append(item['instanceId'])
+            base=ec2.instances.filter(InstanceIds=ids)
+            for inst in base:
+                for vol in inst.volumes.all():
+                    ids.append(vol.id)
+                for eni in inst.network_interfaces:
+                    ids.append(eni.id)    
+        print('Instance IDs: ' + str(instances))
+        print('Total number of instance launched: ' + str(len(instances)))
+        if ids:
+            ec2.create_tags(Resources=ids, Tags=[
+                {'Key':'Project', 'Value':'DFTOF'}
+            ])
+        return True
+    elif eventName == 'CreateBucket' and (username == 'ali.adnan' or username == 'fri.sandrine' or username == 'Main_user'):
+        bucket = detail['requestParameters']['bucketName']
+        if bucket:
+            s3_client.put_bucket_tagging(Bucket=bucket, Tagging={
+                'TagSet': [
+                    {'Key':'Project', 'Value':'DFTOF'}
+            ]
+        })
+        return True
+    elif eventName == 'CreateDBInstance' and (username == 'ali.adnan' or username == 'fri.sandrine' or username == 'Main_user'):
+        rds_instance = event['detail']['responseElements']['dBInstanceArn']
+        if rds_instance:
+            rds_client.add_tags_to_resource(ResourceName=rds_instance,Tags=[
+                {'Key':'Project', 'Value':'DFTOF'}
+            ])
+        return True
+
+        
+        # EFS TAGGING
+    elif eventName == 'CreateFileSystem' and eventSource == 'aws.elasticfilesystem' and (username == 'ali.adnan' or username == 'fri.sandrine' or username == 'Main_user'):
+        # Get the efs arn from the event data
+        efs_id = event['detail']['responseElements']['fileSystemId']
+    
+        # Add the desired tags to the ecs
+        efs_tags = [{'Key':'Project', 'Value':'DFTOF'}]
+    
+        # Update the ecs with the new tags
+        efs_client.tag_resource(ResourceId=efs_id, Tags=efs_tags)
+        return True
+
+        
+        # FSX TAGGING
+    elif eventName == 'CreateFileSystem' and eventSource == 'aws.fsx' and (username == 'ali.adnan' or username == 'fri.sandrine' or username == 'Main_user'):
+        # Get the fsx arn from the event data
+        fsx_arn = event['detail']['responseElements']['fileSystem']['resourceARN']
+    
+        # Add the desired tags to the fsx
+        fsx_tags = [{'Key':'Project', 'Value':'DFTOF'}]
+    
+        # Update the fsx with the new tags
+        fsx_client.tag_resource(ResourceARN=fsx_arn, Tags=fsx_tags)
+        return True
